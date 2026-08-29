@@ -17,7 +17,6 @@ import type {
   BootOptions,
   ExportOptions,
   ExportResult,
-  ExportedFile,
   FileSystemTree,
   KernelMessage,
   ListenerOptions,
@@ -218,7 +217,8 @@ export class Vivari {
       throw new VivariError("ERR_UNKNOWN", (m.error as string) || `export failed: ${path}`);
     }
     return {
-      files: (m.files as ExportedFile[]) ?? [],
+      files: ((m.files as Array<{ path: string; bytes: Uint8Array }>) ?? [])
+        .map(({ path, bytes }) => ({ path, contents: bytes })),
       truncated: !!m.truncated,
     };
   }
