@@ -50,6 +50,7 @@ export class Vivari {
 
   private execSeq = 1;
   private readonly listeners = new Map<string, Set<AnyListener>>();
+  private readonly openPorts = new Set<number>();
   private torndown = false;
 
   private constructor(bridge: KernelBridge) {
@@ -63,6 +64,7 @@ export class Vivari {
       // revived and lost its in-memory host set — still gets preview HTTP routed
       // to this client instead of the top-level host document.
       bridge.announceKernelHost();
+      this.openPorts.add(port);
       this.emit("port", port, "open", bridge.previewUrlFor(port));
     });
     // The kernel only sends this once the port has actually answered a request,
@@ -73,6 +75,7 @@ export class Vivari {
     });
     bridge.on("port-close", (m: KernelMessage) => {
       const port = m.port as number;
+      this.openPorts.delete(port);
       this.emit("port", port, "close", bridge.previewUrlFor(port));
     });
     bridge.on("vv-fs-changed", (m: KernelMessage) => {
@@ -340,6 +343,11 @@ export class Vivari {
   teardown(): void {
     if (this.torndown) return;
     this.torndown = true;
+    // destroy() terminates the kernel worker, so it cannot report close events
+    // for ports that remain live at teardown. Notify hosts while subscriptions
+    // are still active so they can detach previews before the route disappears.
+    for (const port of this.openPorts) this.emit("port", port, "close", this.internal.previewUrlFor(port));
+    this.openPorts.clear();
     this.internal.destroy();
     this.listeners.clear();
   }
