@@ -190,6 +190,9 @@ self.onmessage = async (event) => {
   else if (type === "stdin") onControl((c) => c.dispatchStdin(event.data));
   // A catchable signal (SIGTERM/SIGINT) the kernel is delivering to us.
   else if (type === "signal") onControl((c) => c.dispatchSignal(event.data));
+  // NEXARI-WC006-RESIZE-001 step 2: the kernel's TTY resize control for THIS
+  // process — a synchronous stream-dimension update, no event, no exit.
+  else if (type === "resize") onControl((c) => c.dispatchResize(event.data));
   // An async fetch result relayed by the kernel (parallel downloads).
   else if (type === "fetch-done") onControl((c) => c.dispatchFetch(event.data));
   // A CDP debugger command for this process while it is RUNNING (paused commands

@@ -14,6 +14,11 @@ const MAX_COLUMNS = 1000;
 const MAX_ROWS = 1000;
 const validDim = (value, max) =>
   typeof value === "number" && Number.isInteger(value) && value > 0 && value <= max ? value : null;
+// NEXARI-WC006-RESIZE-001 step 2: ONE source of truth for "a valid dimension".
+// The kernel's resize() gate and the runtime's delivery-side re-check both use
+// this rule, so a wire poster cannot smuggle in a value boot would have refused.
+export const validTtyDim = validDim;
+export const TTY_DIM_MAX = MAX_COLUMNS;
 
 export function createProcess({
   pid = 1,
@@ -26,8 +31,8 @@ export function createProcess({
   nextTick,
   onExit,
   // NEXARI-WC006-RESIZE-001 AC-1: whether the std streams face a terminal, and
-  // the configured initial dimensions. Resize arrives later as a control; the
-  // signal side (SIGWINCH) is a later step of the same spec.
+  // the configured initial dimensions. Resize arrives as a {type:'resize'}
+  // control; the signal side (SIGWINCH) is a later step of the same spec.
   tty = false,
   ttyColumns,
   ttyRows,

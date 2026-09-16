@@ -1782,6 +1782,28 @@ export class Kernel {
   }
 
   /**
+   * NEXARI-WC006-RESIZE-001 step 2: tell a LIVE process its terminal was
+   * resized ({type:'resize', columns, rows} rides the same postToProc control
+   * path a catchable signal uses). Returns false — and posts nothing — when the
+   * pid is gone (stop()/finalize() delete the entry) or a dimension fails the
+   * SAME rule the runtime enforced at boot (positive integer ≤ 1000): the
+   * kernel refuses at the boundary so the streams keep their current values,
+   * exactly as boot-time would have. The SIGWINCH notification side is a later
+   * step of the same spec.
+   */
+  resize(pid, columns, rows) {
+    const proc = this.procs.get(pid);
+    if (!proc || proc.finalized) return false;
+    const validDim = (value) =>
+      typeof value === "number" && Number.isInteger(value) && value > 0 && value <= 1000 ? value : null;
+    const cols = validDim(columns);
+    const rws = validDim(rows);
+    if (cols == null || rws == null) return false;
+    this.postToProc(pid, { type: "resize", columns: cols, rows: rws });
+    return true;
+  }
+
+  /**
    * Send `name` to a running process. Returns false if the pid is gone.
    *
    * Uncatchable signals, and every signal the target has no handler for, take

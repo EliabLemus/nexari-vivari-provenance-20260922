@@ -116,6 +116,9 @@ export function bootProcess({
       dispatchPipe: runtime.dispatchPipe,
       dispatchStdin: runtime.dispatchStdin,
       dispatchSignal: runtime.dispatchSignal,
+      // NEXARI-WC006-RESIZE-001 step 2: the kernel's TTY resize control for
+      // THIS process; a synchronous stream-dimension update in the runtime.
+      dispatchResize: runtime.dispatchResize,
       dispatchFetch: runtime.dispatchFetch,
       dispatchDebugCommand: runtime.dispatchDebugCommand,
       memStats: runtime.memStats,

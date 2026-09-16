@@ -8,7 +8,7 @@ import { createEventLoop } from "./loop.js";
 import { createSignalDelivery } from "./signals.js";
 import { createNodeModules } from "./node/loader.js";
 import { createOs } from "./builtins/os.js";
-import { createProcess } from "./builtins/process.js";
+import { createProcess, validTtyDim, TTY_DIM_MAX } from "./builtins/process.js";
 import { createChildProcess } from "./builtins/child_process.js";
 import { createModuleSystem } from "./module.js";
 import { createWebSocket } from "./websocket.js";
@@ -205,6 +205,10 @@ export function createRuntime({
   // like doNet/doChildren. Wired just below once `stream` exists.
   let drainStdin = () => {};
   let dispatchStdin = () => {};
+  // NEXARI-WC006-RESIZE-001 step 2: external delivery of a TTY resize for THIS
+  // process ({type:'resize', columns, rows}). Set once `process` exists; a
+  // message that arrives before that falls through to the no-op.
+  let dispatchResize = () => {};
   // Assigned once child_process is built; the loop drains child events through it.
   let drainChildEvents = () => {};
   // Assigned once worker_threads is required; the loop drains its queued events.
@@ -330,6 +334,26 @@ export function createRuntime({
   process.kill = (targetPid, signal = "SIGTERM") => {
     syscalls.kill(targetPid | 0, signal);
     return true;
+  };
+
+  // NEXARI-WC006-RESIZE-001 step 2: the delivery side of the resize control.
+  // The kernel posts {type:'resize', columns, rows}; we re-check each dimension
+  // with the SAME rule createProcess used at boot (one source of truth in
+  // builtins/process.js) and no-op on a refusal, so a malformed message cannot
+  // move the streams off the contract. Synchronous property mutation is enough —
+  // unlike stdin/signals there is no guest-visible event or exit semantics to
+  // order: TUIs and tty.getWindowSize()-style readers observe the next value on
+  // whatever turn they next read it. stdout and stderr share the single terminal
+  // today, so both get the new dims; the per-stream TTY AC will split them.
+  dispatchResize = (msg) => {
+    if (!msg || typeof msg !== "object") return;
+    const columns = validTtyDim(msg.columns, TTY_DIM_MAX);
+    const rows = validTtyDim(msg.rows, TTY_DIM_MAX);
+    if (columns == null || rows == null) return;
+    process.stdout.columns = columns;
+    process.stdout.rows = rows;
+    process.stderr.columns = columns;
+    process.stderr.rows = rows;
   };
 
   // Wire the fs.watch host onto `process` (roadmap #19 stage B). The vendored
@@ -2015,6 +2039,10 @@ export function createRuntime({
     /** External delivery from the kernel: a catchable signal for THIS process
      * ({type:'signal', signal:'SIGTERM'|'SIGINT'|…}). Emitted on a loop turn. */
     dispatchSignal: (msg) => dispatchSignalEvent(msg),
+    /** External delivery from the kernel: a TTY resize for THIS process
+     * ({type:'resize', columns, rows}). Synchronous stream-property update;
+     * the SIGWINCH notification is a later step of the same spec. */
+    dispatchResize: (msg) => dispatchResize(msg),
     /** External delivery from the kernel: a CDP debugger command (JSON string) for
      * THIS process, delivered while it is RUNNING (paused commands ride the debug
      * SAB instead). No-op until a debug session is attached. */

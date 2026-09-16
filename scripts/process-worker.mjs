@@ -201,6 +201,9 @@ parentPort.on("message", (msg) => {
   else if (msg.type === "stdin") onControl((c) => c.dispatchStdin(msg));
   // A catchable signal (SIGTERM/SIGINT) the kernel is delivering to us.
   else if (msg.type === "signal") onControl((c) => c.dispatchSignal(msg));
+  // NEXARI-WC006-RESIZE-001 step 2: the kernel's TTY resize control for THIS
+  // process — a synchronous stream-dimension update, no event, no exit.
+  else if (msg.type === "resize") onControl((c) => c.dispatchResize(msg));
   // An async fetch result relayed by the kernel (parallel downloads).
   else if (msg.type === "fetch-done") onControl((c) => c.dispatchFetch(msg));
 });
