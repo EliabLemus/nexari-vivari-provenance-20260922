@@ -209,6 +209,10 @@ export function createRuntime({
   // process ({type:'resize', columns, rows}). Set once `process` exists; a
   // message that arrives before that falls through to the no-op.
   let dispatchResize = () => {};
+  // NEXARI-WC006-RESIZE-001 step 3: the resize NOTIFICATION. A successful resize
+  // sets this flag; the doSignal turn delivers it as `process.emit('SIGWINCH')`.
+  // Coalesced like Unix pending signals — N resizes before a turn are one event.
+  let pendingSigwinch = false;
   // Assigned once child_process is built; the loop drains child events through it.
   let drainChildEvents = () => {};
   // Assigned once worker_threads is required; the loop drains its queued events.
@@ -253,7 +257,19 @@ export function createRuntime({
     doThreads: () => drainThreadEvents(),
     doWatch: () => drainWatchEvents(),
     doStdin: () => drainStdin(),
-    doSignal: () => drainSignals(),
+    // NEXARI-WC006-RESIZE-001 step 3: SIGWINCH rides the signal slot, AFTER the
+    // real signal drain, so a termination signal wins the same turn (Challenger
+    // finding, review 2026-09-16). Zero listeners is a no-op emit on a real
+    // EventEmitter — SIGWINCH's default action (ignore) falls out for free; it
+    // must NEVER reach the kernel's catchable path, which applies handler-less
+    // signals as termination.
+    doSignal: () => {
+      drainSignals();
+      if (pendingSigwinch) {
+        pendingSigwinch = false;
+        process.emit("SIGWINCH", "SIGWINCH");
+      }
+    },
     onPark: (parked) => announceParked(parked),
   });
 
@@ -354,6 +370,13 @@ export function createRuntime({
     process.stdout.rows = rows;
     process.stderr.columns = columns;
     process.stderr.rows = rows;
+    // NEXARI-WC006-RESIZE-001 step 3: dims applied first — the WINCH handler
+    // must observe the new dimensions when it runs. The event itself goes out on
+    // a controlled loop turn (doSignal) so a handler that exits or wedges is
+    // bounded by the same rules as every other guest callback; the wake is the
+    // loop's standard external nudge, the same one signal delivery uses.
+    pendingSigwinch = true;
+    loop.wakeNet();
   };
 
   // Wire the fs.watch host onto `process` (roadmap #19 stage B). The vendored
