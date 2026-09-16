@@ -14,6 +14,7 @@ import { PYTHON_PROGRAM } from "./programs/python.js";
 import { REPL_KIT_SRC } from "./programs/repl-kit.js";
 import { WATCH_KIT_SRC } from "./programs/watch-kit.js";
 import { RUFF_PROGRAM } from "./programs/ruff.js";
+import { PRINTF_PROGRAM } from "./programs/printf.js";
 
 // The bare-command spellings of the launcher's `-m` entrypoints, as
 // `<command>: <module>`. `pip3` sits beside `pip` the way `python3` sits beside
@@ -171,6 +172,12 @@ child.on('close', (code) => process.exit(code | 0));
   clear: `process.stdout.write('\\x1b[H\\x1b[2J\\x1b[3J');\nprocess.exit(0);\n`,
 
   pwd: `process.stdout.write(process.cwd() + '\\n');\nprocess.exit(0);\n`,
+
+  // printf — the POSIX-subset formatter. Lives in programs/printf.js like the
+  // other multi-line programs; refuses unknown directives with a typed
+  // diagnostic and exit 1 rather than silently mis-formatting. See the header
+  // there for exactly what the subset covers.
+  printf: PRINTF_PROGRAM,
 
   true: `process.exit(0);\n`,
 
