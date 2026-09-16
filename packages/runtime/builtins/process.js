@@ -4,7 +4,36 @@
 
 import { nativeAddonError } from "./bun-unsupported.js";
 
-export function createProcess({ pid = 1, ppid = 0, argv = [], env = {}, cwd = "/", stdout, stderr, nextTick, onExit }) {
+// NEXARI-WC006-RESIZE-001 AC-1: dimension validation at the trust boundary.
+// Only finite positive integers within an explicit reasonable maximum are
+// accepted; anything else (and "nothing sent") falls back to the 80x24
+// default rather than a crash or a nonsense value a TUI would misread.
+const DEFAULT_COLUMNS = 80;
+const DEFAULT_ROWS = 24;
+const MAX_COLUMNS = 1000;
+const MAX_ROWS = 1000;
+const validDim = (value, max) =>
+  typeof value === "number" && Number.isInteger(value) && value > 0 && value <= max ? value : null;
+
+export function createProcess({
+  pid = 1,
+  ppid = 0,
+  argv = [],
+  env = {},
+  cwd = "/",
+  stdout,
+  stderr,
+  nextTick,
+  onExit,
+  // NEXARI-WC006-RESIZE-001 AC-1: whether the std streams face a terminal, and
+  // the configured initial dimensions. Resize arrives later as a control; the
+  // signal side (SIGWINCH) is a later step of the same spec.
+  tty = false,
+  ttyColumns,
+  ttyRows,
+}) {
+  const columns = validDim(ttyColumns, MAX_COLUMNS) ?? DEFAULT_COLUMNS;
+  const rows = validDim(ttyRows, MAX_ROWS) ?? DEFAULT_ROWS;
   let _cwd = cwd || "/";
   // nextTick is owned by the event loop (loop.js): its queue drains ahead of
   // Promise microtasks each turn. Fall back to a microtask if no loop is wired.
@@ -51,9 +80,11 @@ export function createProcess({ pid = 1, ppid = 0, argv = [], env = {}, cwd = "/
       if (chunk != null && typeof chunk !== "function") sink(decodeChunk(chunk, encoding));
       if (typeof done === "function") scheduleTick(done);
     },
-    isTTY: false,
-    columns: 80,
-    rows: 24,
+    // NEXARI-WC006-RESIZE-001 AC-1: `tty` says the std streams face a terminal.
+    // Default stays false so captured/pipe spawns keep the honest answer.
+    isTTY: tty,
+    columns,
+    rows,
     writable: true,
     destroyed: false,
     // Writes go straight to the sink (never backpressured), so the EventEmitter /

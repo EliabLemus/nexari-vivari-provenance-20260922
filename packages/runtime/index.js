@@ -99,6 +99,10 @@ export function createRuntime({
   // stdin is parked waiting for this process to exit. Defaults true so an embedder
   // that does not pass it keeps the interactive behaviour it had.
   tty = true,
+  // NEXARI-WC006-RESIZE-001 AC-1: initial terminal dimensions for the std
+  // streams. Undefined (spawner sent none) → the builtins' 80x24 defaults.
+  ttyColumns,
+  ttyRows,
   stdout = () => {},
   stderr = () => {},
   codec = null,
@@ -308,6 +312,11 @@ export function createRuntime({
     cwd,
     stdout,
     stderr,
+    // NEXARI-WC006-RESIZE-001 AC-1: terminal capability + configured initial
+    // dimensions reach the std streams; resize arrives later as a control.
+    tty,
+    ttyColumns,
+    ttyRows,
     nextTick: loop.nextTick,
     // process.exit() flags the loop so drive() returns the right code even when
     // exit() is called from a raw Promise microtask (its throw would escape).

@@ -67,6 +67,11 @@ export function bootProcess({
     // the shell, for every stage of a pipeline and every `<` redirect — now says so, and
     // that answer wins; `!capture` stays the default for everyone who does not.
     tty: spec.tty === undefined ? !spec.capture : !!spec.tty,
+    // NEXARI-WC006-RESIZE-001 AC-1: initial terminal dimensions from the launch
+    // spec, forwarded verbatim; the runtime validates shape (positive finite
+    // integers) and falls back to the 80x24 default when the spawner sent none.
+    ttyColumns: spec.columns,
+    ttyRows: spec.rows,
     stdout: (chunk) => send("stdout", { chunk }),
     stderr: (chunk) => send("stderr", { chunk }),
     postRaw,

@@ -1033,7 +1033,10 @@ export class Kernel {
       // breakpoint debugger's skip-list (`sh`/`npm`/…): without it a debug-mode
       // shell has command=undefined and is wrongly treated as a debug target, so
       // auto-attach lands on the shell instead of the `node` the user runs.
-      { command, programPath, args, cwd, env: opts.env || {} },
+      // NEXARI-WC006-RESIZE-001 AC-1: tty/columns/rows ride the spec, same as
+      // start() — whether a process has a terminal is a property of the
+      // process, not of which function made it.
+      { command, programPath, args, cwd, env: opts.env || {}, tty: opts.tty, columns: opts.columns, rows: opts.rows },
       { capture: !!opts.capture },
     );
     // Captured here too. `start` grew this first, and leaving `launch` without it gave
@@ -1076,7 +1079,12 @@ export class Kernel {
         return;
       }
       const pid = this.createProcess(
-        { command, programPath, args, cwd, env: opts.env || {} },
+        // NEXARI-WC006-RESIZE-001 AC-1: tty/columns/rows ride the spec so
+        // boot.js and the builtins' process see the same terminal facts the
+        // spawner stated. start() and launch() must agree here — whether a
+        // process has a terminal is a property of the process, not of which
+        // function made it.
+        { command, programPath, args, cwd, env: opts.env || {}, tty: opts.tty, columns: opts.columns, rows: opts.rows },
         { capture: !!opts.capture },
       );
       const proc = this.procs.get(pid);
