@@ -229,8 +229,14 @@ export interface SpawnOptions {
    * live (delivered as SIGWINCH). Browser-proven over the owned runtime:
    * NEXARI_WC006_TTY_DIMS at 80x24 then a resize to 100x30 acknowledged by a
    * guest SIGWINCH handler (e2e/browser-smoke.e2e.mjs wc006TtyDimsProof).
+   *
+   * TTY default (dual contract, pinned 2026-09-16): an SDK `spawn` faces PIPES
+   * unless `terminal` is passed — real Node programmatic children never see
+   * `isTTY: true`, and npm's TTY code path swallows its script phase when it
+   * does. The kernel-side `start()` harness keeps its separate uncaptured-spawn
+   * terminal default; the two defaults are intentionally different seams.
    */
-  terminal?: { columns: number; rows: number };
+  terminal?: { columns: number; rows: number }; // browser proof: wc006TtyDimsProof (guest observes 80x24 at spawn) — e2e/browser-smoke.e2e.mjs
 }
 
 /** Whether a port started or stopped being served inside the VM. */
