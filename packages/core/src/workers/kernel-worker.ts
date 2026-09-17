@@ -1269,7 +1269,20 @@ async function spawnProcess(execId, command, args, cwd, extraEnv, terminal) {
   // which the kernel gates itself), so the gate has to run here.
   await kernel.ensureCommandLoaded(command);
   if (!kernel) return;
-  const pid = kernel.launch(command, Array.isArray(args) ? args : [], { cwd: dir, env, tty, columns, rows });
+  // NEXARI-WC006-NPM-TTY-FIX: an SDK spawn faces pipes unless the spawner
+  // explicitly attached a terminal — real Node programmatic children never see
+  // isTTY: true, and npm's TTY code path (gauge + TTY stdout writes) swallows
+  // the script phase when it does (browser-proven regression 2026-09-16: the
+  // npm leg emitted only the banner once guests could OBSERVE the pre-existing
+  // tty=!capture default). boot.js keeps tty=!capture for kernel.start()
+  // terminal harnesses; this path says what it means instead of implying it.
+  const pid = kernel.launch(command, Array.isArray(args) ? args : [], {
+    cwd: dir,
+    env,
+    tty: tty ?? false,
+    columns,
+    rows,
+  });
   if (pid < 0) {
     post("proc-exit", { execId, code: 127, error: command + ": not found" });
     return;
