@@ -1240,7 +1240,7 @@ function baseProcEnv(dir) {
 const execByPid = new Map(); // pid -> execId
 const pidByExec = new Map(); // execId -> pid
 
-async function spawnProcess(execId, command, args, cwd, extraEnv) {
+async function spawnProcess(execId, command, args, cwd, extraEnv, terminal) {
   if (!kernel) {
     post("proc-exit", { execId, code: 127, error: "kernel not ready" });
     return;
@@ -1248,13 +1248,28 @@ async function spawnProcess(execId, command, args, cwd, extraEnv) {
   const dir = cwd || defaultTermCwd();
   const env = baseProcEnv(dir);
   if (extraEnv && typeof extraEnv === "object") Object.assign(env, extraEnv);
+  // NEXARI-WC006-RESIZE-BROWSER: an SDK spawn may attach a terminal with
+  // initial dimensions; whether a process has a terminal is a property of the
+  // process, so the SDK path carries them exactly like the shell path does.
+  let tty;
+  let columns;
+  let rows;
+  if (terminal && typeof terminal === "object") {
+    const cols = Math.floor(Number(terminal.columns));
+    const rws = Math.floor(Number(terminal.rows));
+    if (Number.isFinite(cols) && cols > 0 && Number.isFinite(rws) && rws > 0) {
+      tty = true;
+      columns = cols;
+      rows = rws;
+    }
+  }
   // On-demand: materialize a lazily-registered heavy tool (tsc/tsgo/yarn/pnpm/
   // corepack) before launching, so `vivari.spawn('tsc', …)` works on first use.
   // `launch` goes straight to resolveProgram (unlike the shell's OP_SPAWN path,
   // which the kernel gates itself), so the gate has to run here.
   await kernel.ensureCommandLoaded(command);
   if (!kernel) return;
-  const pid = kernel.launch(command, Array.isArray(args) ? args : [], { cwd: dir, env });
+  const pid = kernel.launch(command, Array.isArray(args) ? args : [], { cwd: dir, env, tty, columns, rows });
   if (pid < 0) {
     post("proc-exit", { execId, code: 127, error: command + ": not found" });
     return;
@@ -2610,7 +2625,7 @@ self.onmessage = async (event) => {
   // Run one command directly (no wrapping shell) and stream its output/exit back
   // by `execId`. See spawnProcess + the execByPid routing in boot().
   if (m.type === "proc-spawn") {
-    void spawnProcess(m.execId, m.command, m.args, m.cwd, m.env).catch((err) =>
+    void spawnProcess(m.execId, m.command, m.args, m.cwd, m.env, m.terminal).catch((err) =>
       post("proc-exit", { execId: m.execId, code: 127, error: (err && err.message) || String(err) }),
     );
     return;
@@ -2619,6 +2634,15 @@ self.onmessage = async (event) => {
   if (m.type === "proc-input") {
     const pid = pidByExec.get(m.execId);
     if (pid != null && kernel) kernel.sendStdin(pid, m.chunk == null ? null : m.chunk);
+    return;
+  }
+  // Resize a spawned process's attached terminal. The kernel validates the
+  // dimensions and the pid: invalid values and dead pids are refused with no
+  // side effect (the guest simply never sees a resize), matching Unix where an
+  // ioctl on a closed pty is the caller's problem, not the kernel's.
+  if (m.type === "proc-resize") {
+    const pid = pidByExec.get(m.execId);
+    if (pid != null && kernel) kernel.resize(pid, m.columns, m.rows);
     return;
   }
   // Kill a spawned process (its exit is still reported via onProcExit → proc-exit).

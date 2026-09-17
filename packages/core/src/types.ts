@@ -223,6 +223,14 @@ export interface SpawnOptions {
    * `spawn()` reject with `ERR_ABORTED` without launching anything.
    */
   signal?: AbortSignal;
+  /**
+   * Attach a terminal with these initial dimensions. The guest observes them on
+   * `process.stdout.columns/rows`, and a later `process.resize()` updates them
+   * live (delivered as SIGWINCH). Browser-proven over the owned runtime:
+   * NEXARI_WC006_TTY_DIMS at 80x24 then a resize to 100x30 acknowledged by a
+   * guest SIGWINCH handler (e2e/browser-smoke.e2e.mjs wc006TtyDimsProof).
+   */
+  terminal?: { columns: number; rows: number };
 }
 
 /** Whether a port started or stopped being served inside the VM. */

@@ -181,12 +181,25 @@ export class VivariProcess {
       args,
       cwd: options.cwd,
       env: options.env,
+      terminal: options.terminal,
     });
   }
 
   /** In-VM process id, or -1 before the kernel confirms the launch. */
   get pid(): number {
     return this.procPid;
+  }
+
+  /**
+   * Resize the attached terminal (SIGTERM-safe no-op for a captured process).
+   * The kernel refuses invalid dimensions and dead pids (returns without
+   * posting), so a stale resize is silently inert. Browser-proven over the
+   * owned runtime: NEXARI_WC006_RESIZE to 100x30 acknowledged by a guest
+   * SIGWINCH handler (e2e/browser-smoke.e2e.mjs wc006ResizeProof).
+   */
+  resize(dimensions: { columns: number; rows: number }): void {
+    if (this.killed) return;
+    this.bridge.post("proc-resize", { execId: this.execId, columns: dimensions.columns, rows: dimensions.rows });
   }
 
   /** The exit code, or `null` while the process is still running. */
